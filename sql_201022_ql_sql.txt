@@ -1,0 +1,270 @@
+--16장 인덱스
+ ---조회를 빠르게 하는 인덱스 
+ -- 하지만 인덱스는 장점만 있는 것이 아닙니다. 
+ --컬럼에 인덱스를 설정하면 이를 위한 B* 트리도 생성되어야 하기
+--때문에 인덱스를 생성하기 위한 시간도 필요하고 인덱스를 위한
+--추가적인 공간이 필요하게 됩니다.
+
+--데이터베이스에서는 인서트 델ㄹ트보다 셀렉트작업이 많기에 검색 효율성이 중요하다
+
+SELECT INDEX_NAME, TABLE_NAME , COLUMN_NAME
+FROM USER_IND_COLUMNS
+WHERE TABLE_NAME IN('emp','dept'); 
+
+desc dept_example;
+
+-- 인덱스 생성하기
+--CREATE INDEX index_name
+--ON table_name (column_name); 
+
+--CREATE INDEX IDX_EMP01_ENAME
+--ON EMP01(ENAME); 
+drop table dept01;
+
+create table emp01
+as
+select*from emp;
+
+SELECT INDEX_NAME, TABLE_NAME , COLUMN_NAME--복제된 emp01 기본키가 없다 즉 인덱스가 만들어지지 않았다
+FROM USER_IND_COLUMNS
+WHERE TABLE_NAME IN('EMP01'); 
+
+CREATE INDEX IDX_EMP01_ENAME  --인덱스 생성
+ON EMP01(ENAME); 
+
+--어떤 컬럼을 인덱스로??
+--기본키, 유니크 등
+
+create index idx_emp01_job --잡을 인덱스하기
+on emp01(job);
+
+drop index idx_emp01_job;  --인덱스 삭제
+
+
+-- 인덱스를 사용해야 하는 경우 판단하기
+--테이블에 행의 수가 많을 때 
+--WHERE 문에 해당 컬럼이 많이 사용될 때 
+--검색 결과가 전체 데이터의 2%~4% 정도 일 때 
+--JOIN에 자주 사용되는 컬럼이나 NULL을 포함하는 컬럼이 많은 경우
+
+--인덱스의 물리적인 구조와 인덱스의 재생성
+--ALTER INDEX index_name REBUILD; 
+
+
+create table dept01
+as
+select*from dept;
+
+create index idx_dept01_com
+on dept01(deptno, dname);
+
+SELECT INDEX_NAME, TABLE_NAME , COLUMN_NAME
+FROM USER_IND_COLUMNS
+WHERE TABLE_NAME IN('DEPT01'); 
+
+--함수 기반 인덱스
+CREATE INDEX IDX_EMP01_ANNSAL
+ON EMP01(SAL*12); 
+
+SELECT INDEX_NAME, TABLE_NAME , COLUMN_NAME
+FROM USER_IND_COLUMNS
+WHERE TABLE_NAME IN('emp01'); 
+
+
+
+--
+--17장 사용자 관리
+--
+
+
+--시스템권한
+--dba
+
+creATe  USER user01 identified by tiger;
+
+grant create session to user01;
+
+creATe  USER mbc identified by tiger;
+grant create session to mbc;
+
+create user USER77 identified by TIGER;
+GRANT CREATE SESSION TO USER77 WITH ADMIN OPTION;  --USER02
+
+create user USER03 identified by TIGER;
+GRANT CREATE SESSION TO USER03;  
+
+
+--롤
+
+create user USER04 identified by TIGER;  --계정생성
+GRANT CONNECT, RESOURCE TO USER04;  --권한
+-- CONN USER04/TIGER 연결된다
+
+
+====================
+
+SET SERVEROUTPUT ON 
+--한번만 실행해 주면 된다
+
+BEGIN  --PLSQL 구문의 시작
+DBMS_OUTPUT.PUT_LINE('Hello World!');
+END;
+/ 
+--런 비긴부터 엔드까지 실행된다
+
+DECLARE
+    VEMPNO NUMBER(4);
+    VENAME VARCHAR2(10);  
+BEGIN
+    VEMPNO := 7788;
+    VENAME := 'SCOTT';
+    DBMS_OUTPUT.PUT_LINE('사번 / 이름');
+    DBMS_OUTPUT.PUT_LINE('-------------');
+    DBMS_OUTPUT.PUT_LINE(VEMPNO || '/' ||VENAME);
+END;
+/
+-- || : 연결연산자
+
+DECLARE
+-- %TYPE 속성으로 컬런단위 래퍼런스 변수선언
+    VEMPNO EMP.EMPNO%TYPE;
+    VENAME EMP.ENAME%TYPE;
+BEGIN
+    DBMS_OUTPUT.PUT_LINE('사번 /이름');
+    DBMS_OUTPUT.PUT_LINE('-----------');
+
+SELECT EMPNO, ENAME INTO VEMPNO, VENAME
+FROM EMP
+WHERE ENAME ='FORD';
+--WHERE JOB ='MANAGER'; --매니저로 많이 조회되기 때문에 에러
+
+    DBMS_OUTPUT.PUT_LINE(VEMPNO || '/'|| VENAME);
+END;
+/
+
+
+
+
+-- PL/SQL 테이블
+--sql과 다르게 배열이다
+
+DECLARE
+--테이블 타입을 정의
+TYPE ENAME_TABLE_TYPE IS TABLE OF EMP.ENAME%TYPE
+    INDEX BY BINARY_INTEGER;
+TYPE JOB_TABLE_TYPE IS TABLE OF EMP.JOB%TYPE
+    INDEX BY BINARY_INTEGER;
+
+--테이블 타입으로 변수선언
+ENAME_TABLE ENAME_TABLE_TYPE;
+--배열객체가 된다  ENAME_TABLE_TYPE을 통해서 만들었다. EMP.ENAME%TYPE타입의 배열객체를 만들었다
+JOB_TABLE JOB_TABLE_TYPE;
+I BINARY_INTEGER := 0;
+--배열객체는 (각각 요소에 접근할 수있는) 인덱스가 필요하고 I란 객체를 배열객체의 인데스로 사용
+
+BEGIN
+--EMP 테이블에서 사원이름과 직급을 얻어옴
+FOR K IN (SELECT ENAME, JOB FROM EMP) LOOP
+--인투절이없다
+-- K  두개의 컬럼을 행(로우)으로 다룰수 있는 레코드변수
+    I := I+1;       --인덱스증가
+    ENAME_TABLE(I) := K.ENAME;
+    JOB_TABLE(I) := K.JOB;
+END LOOP;
+
+--테이블에 저장된 내용을 출력
+FOR J IN 1..I LOOP
+    DBMS_OUTPUT.PUT_LINE(RPAD(ENAME_TABLE(J),12) || '/'||
+                        RPAD(JOB_TABLE(J),9));
+                        --RPAD 오른쪽을 빈공간으로채움  길이가 긴쪽을 앞에 두면 정렬이 되어보인다?
+    END LOOP;
+ END;
+ /
+
+--위 반복문은 한번밖에 못써서> 프리시저를 사용한다
+-->>프리시저배울때 한번 확인해보도록
+
+
+
+
+--PL/SQL RECORD TYPE
+
+SET SERVEROUTPUT ON
+DECLARE
+--레코드 타입을 정의
+TYPE EMP_RECORD_TYPE IS RECORD(
+    V_EMPNO EMP.EMPNO%TYPE,
+    V_ENAME EMP.ENAME%TYPE,
+    V_JOB EMP.JOB%TYPE,
+    V_DEPTNO EMP.DEPTNO%TYPE);
+    
+    
+    --레코드로 변수선언
+    EMP_RECORD EMP_RECORD_TYPE;
+
+BEGIN
+--SCOTT 사원의 정보를 레코드 변수에 저장
+    SELECT EMPNO, ENAME, JOB, DEPTNO
+    INTO EMP_RECORD
+    FROM EMP
+    WHERE ENAME =UPPER('SCOTT');
+    --EMP에서 비교, 스콧인건 하나
+
+--레코드 변수에 저장된 사원 정보를 출력
+    DBMS_OUTPUT.PUT_LINE('사원번호:' || TO_CHAR(EMP_RECORD.V_EMPNO));
+    DBMS_OUTPUT.PUT_LINE('이    름:' || EMP_RECORD.V_ENAME);
+    DBMS_OUTPUT.PUT_LINE('담당업무:' || EMP_RECORD.V_JOB);
+    DBMS_OUTPUT.PUT_LINE('부서번호:' || TO_CHAR(EMP_RECORD.V_DEPTNO));
+END;
+/
+
+
+DECLARE
+
+TYPE DEPT_RECORD_TYPE IS RECORD(
+    DD_DEPTNO DEPT.DEPTNO%TYPE,
+    DD_DNAME DEPT.DNAME%TYPE,
+    DD_LOC DEPT.LOC%TYPE);
+    
+    DEPT_RECORD DEPT_RECORD_TYPE;
+BEGIN
+    SELECT DEPTNO, DNAME, LOC
+    INTO DEPT_RECORD
+    FROM DEPT
+    WHERE DEPTNO =10;
+    
+    DBMS_OUTPUT.PUT_LINE( '부서번호  '|| TO_CHAR(DEPT_RECORD.DD_DEPTNO));
+    DBMS_OUTPUT.PUT_LINE( '부서이름  '|| DEPT_RECORD.DD_DNAME);
+    DBMS_OUTPUT.PUT_LINE( '부서지역  '|| DEPT_RECORD.DD_LOC);
+END;
+/
+
+
+SET SERVEROUTPUT ON 
+--한번만 실행해 주면 된다
+
+DECLARE
+    TYPE ED_RECORD_TYPE IS RECORD (
+    V_EMPNO EMP.EMPNO%TYPE,
+    V_ENAME EMP.ENAME%TYPE,
+    V_JOB EMP.JOB%TYPE,
+    V_DEPTNO EMP.DEPTNO%TYPE,
+    V_DNAME DEPT.DNAME%TYPE
+    );
+    
+    ED_RECORD ED_RECORD_TYPE;
+
+BEGIN
+    SELECT E.EMPNO, E.ENAME, E.JOB, E.DEPTNO,D.DNAME
+    INTO ED_RECORD
+    FROM EMP E, DEPT D
+    WHERE E.DEPTNO =D.DEPTNO AND E.ENAME ='SCOTT';
+    
+    DBMS_OUTPUT.PUT_LINE( '사원번호 '||TO_CHAR(ED_RECORD.V_EMPNO));
+    DBMS_OUTPUT.PUT_LINE( '이   름 '||ED_RECORD.V_ENAME);
+    DBMS_OUTPUT.PUT_LINE( '담당업무 '||ED_RECORD.V_JOB);
+    DBMS_OUTPUT.PUT_LINE( '부서번호 '||TO_CHAR(ED_RECORD.V_DEPTNO));
+    DBMS_OUTPUT.PUT_LINE( '부 서 명 '|| ED_RECORD.V_DNAME);
+
+END;
+/
